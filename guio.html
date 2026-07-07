@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fer-Vert — Guió visual de l'app de rutes</title>
+<style>
+  :root { --verd:#2e7d32; --verd-fosc:#1b5e20; --verd-clar:#e8f5e9; --gris:#f5f5f5; --taronja:#e65100; --taronja-clar:#fff3e0; --vermell:#b71c1c; --vermell-clar:#ffebee; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; margin:0; background:var(--gris); color:#222; line-height:1.5; }
+  header { background:var(--verd-fosc); color:#fff; padding:22px 24px; text-align:center; }
+  header h1 { margin:0 0 4px; font-size:24px; }
+  header p { margin:0; opacity:.85; font-size:14px; }
+  main { max-width:760px; margin:0 auto; padding:20px 16px 60px; }
+  .step { background:#fff; border-radius:14px; padding:20px 22px; margin-bottom:18px; box-shadow:0 1px 4px rgba(0,0,0,.08); display:flex; gap:16px; }
+  .num { flex:0 0 auto; width:38px; height:38px; border-radius:50%; background:var(--verd); color:#fff; font-weight:700; font-size:17px; display:flex; align-items:center; justify-content:center; }
+  .step h2 { margin:2px 0 6px; font-size:17px; color:var(--verd-fosc); }
+  .step p { margin:0 0 10px; font-size:14px; color:#444; }
+  .step-body { flex:1; min-width:0; }
+  .mock { border:1.5px dashed #bbb; border-radius:10px; padding:14px; background:#fafafa; margin-top:10px; }
+  .mock-label { font-size:11px; color:#999; text-transform:uppercase; letter-spacing:.04em; margin-bottom:8px; font-weight:600; }
+  /* mockups mimicking the real app */
+  .m-row { display:flex; align-items:center; gap:6px; padding:4px 6px; font-size:12px; font-family:Menlo, monospace; border-bottom:1px solid #eee; }
+  .m-rownum { width:20px; color:#888; text-align:right; }
+  .m-sel { background:#d2e3fc; }
+  .m-btn { display:inline-block; background:var(--verd); color:#fff; border-radius:6px; padding:7px 14px; font-size:13px; font-weight:600; margin-top:4px; }
+  .m-btn.sec { background:#fff; color:var(--verd); border:1.5px solid var(--verd); }
+  .m-pill { display:inline-block; padding:2px 10px; border-radius:12px; font-size:11px; font-weight:600; background:var(--verd-clar); color:var(--verd-fosc); margin-left:6px; }
+  .m-textarea { border:1px solid #ccc; border-radius:6px; padding:8px; font-family:Menlo, monospace; font-size:11px; background:#fff; color:#333; white-space:pre-wrap; }
+  .m-prec { font-size:9px; font-weight:700; padding:1px 5px; border-radius:8px; margin-left:4px; }
+  .m-prec.ok { background:#e8f5e9; color:#2e7d32; }
+  .m-prec.mig { background:var(--taronja-clar); color:var(--taronja); }
+  .m-route { border:1px solid #eee; border-radius:8px; padding:10px 12px; background:#fff; }
+  .m-route .title { font-weight:700; color:var(--verd); font-size:13px; margin-bottom:4px; }
+  .m-route ol { margin:6px 0; padding-left:18px; font-size:12px; }
+  .m-route li { margin:3px 0; }
+  .m-nav { color:var(--verd); font-size:12px; font-weight:600; }
+  .m-map { height:70px; border-radius:8px; background:linear-gradient(135deg,#c8e6c9,#a5d6a7); display:flex; align-items:center; justify-content:center; color:var(--verd-fosc); font-size:11px; position:relative; overflow:hidden; }
+  .m-map::before { content:''; position:absolute; inset:0; background-image: radial-gradient(circle, #7cb342 1px, transparent 1px); background-size:10px 10px; opacity:.4; }
+  .m-map span { z-index:1; background:#c62828; color:#fff; width:18px; height:18px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; margin:0 4px; }
+  .badge-row { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+  .keycap { display:inline-block; background:#333; color:#fff; border-radius:4px; padding:2px 7px; font-size:11px; font-family:Menlo, monospace; }
+  .summary { background:var(--verd-clar); border-radius:14px; padding:20px 22px; }
+  .summary h2 { margin:0 0 10px; color:var(--verd-fosc); font-size:16px; }
+  .summary ol { margin:0; padding-left:20px; font-size:14px; }
+  .summary li { margin:6px 0; }
+  footer { text-align:center; font-size:12px; color:#999; padding:18px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🚛 Fer-Vert — Com fer servir l'app de rutes</h1>
+  <p>Guió pas a pas, del full de càlcul fins al conductor</p>
+</header>
+
+<main>
+
+  <div class="step">
+    <div class="num">1</div>
+    <div class="step-body">
+      <h2>Obre el full de càlcul dels clients</h2>
+      <p>Obre el Google Sheet "Recollides GENERAL", el de sempre. Localitza les files dels clients que vols planificar aquest mes.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="num">2</div>
+    <div class="step-body">
+      <h2>Selecciona les files completes</h2>
+      <p>Fes clic al número de la primera fila. Mantén premuda <span class="keycap">⇧ Majúscules</span> i fes clic al número de l'última fila. Queden seleccionades senceres, de la columna A fins al final.</p>
+      <div class="mock">
+        <div class="mock-label">Així es veu al full de càlcul</div>
+        <div class="m-row m-sel"><div class="m-rownum">2</div><div>23&nbsp;&nbsp;Selección Batallé, SA&nbsp;&nbsp;Blanc&nbsp;&nbsp;Montagut&nbsp;&nbsp;Garrotxa</div></div>
+        <div class="m-row m-sel"><div class="m-rownum">3</div><div>96&nbsp;&nbsp;Sat Alt Empordà&nbsp;&nbsp;&nbsp;&nbsp;Castelló d'Empúries&nbsp;&nbsp;Alt Empordà</div></div>
+        <div class="m-row m-sel"><div class="m-rownum">4</div><div>1077&nbsp;&nbsp;Ramadera Montpedrós SL&nbsp;&nbsp;Mas Borrell&nbsp;&nbsp;Casavells</div></div>
+        <div class="m-row m-sel"><div class="m-rownum">5</div><div>1032&nbsp;&nbsp;Ramadera Montpedrós SL&nbsp;&nbsp;Mas Pou&nbsp;&nbsp;La Pera</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="num">3</div>
+    <div class="step-body">
+      <h2>Copia-les al portapapers</h2>
+      <p>Botó dret a sobre de la selecció → <b>"Copia"</b>. O directament <span class="keycap">⌘C</span> (Mac) / <span class="keycap">Ctrl+C</span> (Windows).</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="num">4</div>
+    <div class="step-body">
+      <h2>Obre l'aplicació de rutes</h2>
+      <p>Ves a l'enllaç de l'app: <b>jponsclaret-cyber.github.io/Fer-vert-rutes</b></p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="num">5</div>
+    <div class="step-body">
+      <h2>Enganxa els clients a la caixa de dalt</h2>
+      <p>Fes clic dins la caixa "1 · Clients del mes" i enganxa: <span class="keycap">⌘V</span> / <span class="keycap">Ctrl+V</span>.</p>
+      <div class="mock">
+        <div class="mock-label">1 · Clients del mes</div>
+        <div class="m-textarea">23&#9;Selección Batallé, SA&#9;Blanc&#9;Montagut&#9;Garrotxa
+96&#9;Sat Alt Empordà&#9;&#9;Castelló d'Empúries&#9;Alt Empordà
+1077&#9;Ramadera Montpedrós SL&#9;Mas Borrell&#9;Casavells&#9;Baix Empordà</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="num">6</div>
+    <div class="step-body">
+      <h2>Analitza el llistat</h2>
+      <p>Prem el botó verd. Si tot va bé, surt un avís verd amb quants clients s'han identificat.</p>
+      <div class="mock">
+        <span class="m-btn">Analitza el llistat</span>
+        <span class="m-pill">3 identificats</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="num">7</div>
+    <div class="step-body">
+      <h2>Paràmetres (només si cal canviar-los)</h2>
+      <p>"Clients per dia" i "Màx. km per dia" — si no ho saps, deixa-ho tal com està.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="num">8</div>
+    <div class="step-body">
+      <h2>Calcula les rutes</h2>
+      <p>Prem el botó verd. Triga uns segons mentre calcula quilòmetres reals per carretera.</p>
+      <div class="mock">
+        <span class="m-btn">Calcula les rutes</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="num">9</div>
+    <div class="step-body">
+      <h2>Mira el resultat: mapa i ruta</h2>
+      <p>Apareix un mapa amb la ruta dibuixada i, a sota, una targeta per cada dia amb els clients EN ORDRE de visita. Cada nom porta una etiqueta de color: verda = fiable, taronja = aproximada.</p>
+      <div class="mock">
+        <div class="mock-label">Mapa amb la ruta</div>
+        <div class="m-map"><span>1</span><span>2</span><span>3</span></div>
+        <div class="mock-label" style="margin-top:12px">Ruta 1 · Dia 1</div>
+        <div class="m-route">
+          <div class="title">3 recollides · 158 km reals · 2h 49min</div>
+          <ol>
+            <li>Pere Puig Solés <span class="m-prec ok">masia</span> — Rupià</li>
+            <li>Ramadera Montpedrós SL <span class="m-prec ok">rega</span> — Casavells</li>
+            <li>Selección Batallé, SA <span class="m-prec ok">masia</span> — Montagut</li>
+          </ol>
+          <span class="m-nav">📍 Navegació</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="num">10</div>
+    <div class="step-body">
+      <h2>Envia la ruta al conductor</h2>
+      <p>Fes clic a l'enllaç <b>"Navegació"</b> (o envia'l per WhatsApp). Google Maps s'obre sol i porta de parada en parada, en ordre.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="num">11</div>
+    <div class="step-body">
+      <h2>Exportar o imprimir (opcional)</h2>
+      <div class="badge-row">
+        <span class="m-btn sec">⬇ Exporta CSV</span>
+        <span class="m-btn sec">🖨 Imprimeix full de rutes</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="summary">
+    <h2>Resum en 5 passos</h2>
+    <ol>
+      <li>Selecciona les files al Google Sheet i copia-les.</li>
+      <li>Obre l'app i enganxa-les a la caixa de dalt.</li>
+      <li>Prem "Analitza el llistat".</li>
+      <li>Prem "Calcula les rutes".</li>
+      <li>Envia l'enllaç de "Navegació" de cada dia al conductor.</li>
+    </ol>
+  </div>
+
+</main>
+
+<footer>Fer-Vert · les dades no surten del teu ordinador (només es carrega el mapa)</footer>
+
+</body>
+</html>
