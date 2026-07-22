@@ -13,6 +13,9 @@
   header { background:var(--verd-fosc); color:#fff; padding:14px 24px; display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; }
   header h1 { margin:0; font-size:20px; }
   header span { opacity:.8; font-size:13px; }
+  #countdown { margin-left:auto; opacity:1; font-size:12px; font-weight:600; background:rgba(255,255,255,.12); padding:5px 10px; border-radius:6px; }
+  #countdown.soon { background:#e65100; }
+  #countdown.expired { background:#b71c1c; }
   main { max-width:1500px; margin:0 auto; padding:16px; }
   .card { background:#fff; border-radius:10px; padding:16px 18px; margin-bottom:14px; box-shadow:0 1px 3px rgba(0,0,0,.08); }
   h2 { font-size:15px; margin:0 0 10px; color:var(--verd-fosc); }
@@ -61,6 +64,7 @@
 <header>
   <h1>🚛 Fer-Vert — Rutes de recollida</h1>
   <span>Depot: Riudellots de la Selva · <span id="dbcount">carregant…</span> clients a la base</span>
+  <span id="countdown">⏳ calculant…</span>
 </header>
 <main>
 
@@ -665,6 +669,24 @@ function clusterByDistanceM(clientsWithMi, M, maxPerDay) {
 }
 
 
+
+const PROVA_LIMIT = new Date('2026-07-31T23:59:59');
+function updateCountdown(){
+  const el = document.getElementById('countdown');
+  const now = new Date();
+  const diffMs = PROVA_LIMIT - now;
+  const dies = Math.ceil(diffMs / 86400000);
+  el.classList.remove('soon', 'expired');
+  if (diffMs <= 0){
+    el.textContent = '⏳ Versió de prova caducada (31/07/2026)';
+    el.classList.add('expired');
+  } else {
+    el.textContent = '⏳ Versió de prova — caduca el 31/07/2026 (' + dies + (dies === 1 ? ' dia' : ' dies') + ')';
+    if (dies <= 7) el.classList.add('soon');
+  }
+}
+updateCountdown();
+setInterval(updateCountdown, 3600000);
 
 let DB = [];
 const DB_URL = 'https://gist.githubusercontent.com/jponsclaret-cyber/f02c49fe5390d508731cfbcc5e06b294/raw/34d48da84d0a453487224d4c2b35c0bb4faea544/fervert_clients_db.json';
