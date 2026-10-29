@@ -128,7 +128,7 @@
 </div>
 
 </main>
-<footer>Fer-Vert · optimitzador local — les dades no surten del teu ordinador (només es carrega el mapa)</footer>
+<footer>Fer-Vert · optimitzador local — la base de clients no surt del teu ordinador. Només s'envien coordenades (càlcul de rutes) i noms de pobles i masies (geocodificador ICGC), mai noms de persones.</footer>
 
 <div id="pwmodal">
   <div id="pwbox">
@@ -822,8 +822,8 @@ function esc(s){ const d=document.createElement('div'); d.textContent=s==null?''
 function precBadge(c){
   const p = c.precisio || '';
   if (!p) return '';
-  const cls = (p === 'municipi') ? 'prec-baix' : (p === 'poble' || p === 'rega?') ? 'prec-mig' : 'prec-ok';
-  const tit = { masia:'masia exacta (nomenclàtor ICGC)', rega:'registre oficial ramader (REGA)', 'rega?':'REGA probable, pendent confirmar', carrer:'adreça de carrer exacta', poble:'aproximat: centre del poble', municipi:'aproximat: centre del municipi' }[p] || p;
+  const cls = (p === 'municipi') ? 'prec-baix' : (p === 'poble' || p === 'rega?' || p === 'masia?') ? 'prec-mig' : 'prec-ok';
+  const tit = { masia:'masia exacta (nomenclàtor ICGC)', rega:'registre oficial ramader (REGA)', 'rega?':'REGA probable, pendent confirmar', 'masia?':'masia probable (nom gairebé igual), pendent confirmar', carrer:'adreça de carrer exacta', poble:'aproximat: centre del poble', municipi:'aproximat: centre del municipi' }[p] || p;
   return ' <span class="prec ' + cls + '" title="' + tit + '">' + esc(p) + '</span>';
 }
 
@@ -905,11 +905,11 @@ function analitza(){
   }
   if (unmatched.length){
     html += '<div><span class="pill bad">No geolocalitzats — s\'exclouen del càlcul</span> ' +
-      (unmatched.filter(u => u.row.poble).length > 1 ? '<button class="mini" onclick="afegeixTotsPobles()">＋ afegeix-los tots al centre del seu poble</button>' : '') +
+      (unmatched.filter(u => u.row.poble).length > 1 ? '<button class="mini" onclick="afegeixTotsPobles()">📍 localitza-les totes</button>' : '') +
       '<ul id="unmatchedlist">' +
       unmatched.map((u,i) =>
         '<li>' + esc(u.row.raw.slice(0,90)) + ' <i>(' + u.reason + ')</i> ' +
-        (u.row.poble ? '<button class="mini addp" data-i="' + i + '" onclick="afegeixPoble(' + i + ', this)">＋ afegir al centre de ' + esc(u.row.poble) + '</button>' : '') +
+        (u.row.poble ? '<button class="mini addp" data-i="' + i + '" onclick="afegeixPoble(' + i + ', this)">📍 localitzar (granja o centre de ' + esc(u.row.poble) + ')</button>' : '') +
         '</li>').join('') + '</ul></div>';
     window._unmatched = unmatched;
   }
@@ -943,6 +943,58 @@ async function geocodePoble(poble){
   return null;
 }
 
+// ---- localitzar la granja pel nom (nomenclàtor ICGC), a prop del centre del poble ----
+const PREFIX_LLOC = /^((mas|can|ca n|cal|ca l|el|la|les|els|l|granja|granges|granjas|sat)\s+)+/;
+const coreLloc = t => norm(t).replace(PREFIX_LLOC, '').trim();
+const VIA = /^(carrer|cami|carretera|avinguda|placa|passatge|passeig|ronda|travessera|pista)\b/;
+
+// noms candidats: explotació (sense codis tipus "BI01-") i, si és una empresa o masia, el nom del client.
+// Mai s'envien noms de persona (p. ex. "Joan Galí") al geocodificador.
+function nomsGranja(row){
+  const out = [];
+  String(row.adreca || '').replace(/^[A-Z]{0,3}\d+[A-Z]?\d*\s*-\s*/, '').split(/\s+-\s+/).forEach(t => {
+    t = t.trim(); if (!t) return;
+    out.push(t);
+    const w = t.split(/\s+/).slice(0, -1);                      // "La Riera desmamador" -> "La Riera"
+    if (w.length >= 2 && !/^(de|del|d|la|les|els|el|i)$/i.test(w[w.length - 1])) out.push(w.join(' '));
+  });
+  const nom = String(row.nom || '');
+  if (/\b(SL|SLU|SCP|SAT|SA|SC|SCCL)\b|^(ca|can|cal|mas|granja|granges)\b/i.test(nom))
+    out.push(nom.replace(/,?\s*\b(SL|SLU|SCP|SAT|SA|SC|SCCL)\b\.?/gi, '').trim());
+  return [...new Set(out)].filter(t => coreLloc(t).length >= 3);
+}
+
+const geoCache = {};
+async function icgc(text){
+  if (!(text in geoCache)) {
+    const r = await fetch('https://eines.icgc.cat/geocodificador/cerca?limit=30&text=' + encodeURIComponent(text));
+    geoCache[text] = (await r.json()).features || [];
+  }
+  return geoCache[text];
+}
+
+// 1r: nom exacte (sense articles ni "Mas/Can…") a ≤ 8 km del poble -> 'masia'.
+// 2n: nom amb una lletra de diferència (Rubaix/Ruaix) -> 'masia?', cal confirmar.
+async function geocodeGranja(row, cen){
+  let probable = null;
+  for (const nom of nomsGranja(row)) {
+    const core = coreLloc(nom);
+    for (const q of [nom, core, core + ' ' + cen.poble]) {
+      for (const f of await icgc(q)) {
+        const p = f.properties, c = f.geometry.coordinates;
+        const tip = (p.addendum && p.addendum.tipus) || '';
+        if (VIA.test(norm(p.nom))) continue;                       // carrers i camins no són la granja
+        if (p.layer !== 'address' && !/Edificaci|Disseminat|Indret|Entitat|Nucli/.test(tip)) continue;
+        if (haversine({ lat: c[1], lon: c[0] }, cen) > 8) continue;
+        const g = { nomLloc: p.nom, zona: p.comarca || cen.zona || '', lat: c[1], lon: c[0] };
+        if (coreLloc(p.nom) === core) return Object.assign(g, { precisio: 'masia' });
+        if (!probable && core.length >= 5 && editDist1(coreLloc(p.nom), core)) probable = Object.assign(g, { precisio: 'masia?' });
+      }
+    }
+  }
+  return probable;
+}
+
 async function afegeixPoble(i, btn){
   const u = window._unmatched[i];
   if (u.added) return;
@@ -950,11 +1002,13 @@ async function afegeixPoble(i, btn){
   let cen = pobleCentroid(u.row.poble);
   if (!cen) { try { cen = await geocodePoble(u.row.poble); } catch (e) { cen = null; } }
   if (!cen) { btn.textContent = '⚠ poble no trobat'; return; }
+  let g = null;
+  try { g = await geocodeGranja(u.row, cen); } catch (e) { g = null; }
   u.added = true;
   monthly.push({ id:u.row.id||'', nom:u.row.nom||u.row.raw.slice(0,40), adreca:u.row.adreca||'',
-    poble:cen.poble, zona:cen.zona||'', lat:cen.lat, lon:cen.lon, precisio:'poble' });
+    poble:cen.poble, zona:(g ? g.zona : cen.zona)||'', lat:g ? g.lat : cen.lat, lon:g ? g.lon : cen.lon, precisio:g ? g.precisio : 'poble' });
   document.getElementById('matchpill').innerHTML = '<span class="pill ok">' + monthly.length + ' identificats</span>';
-  btn.textContent = '✓ afegit';
+  btn.textContent = g ? (g.precisio === 'masia' ? '✓ granja trobada: ' : '✓ probable (verifica): ') + g.nomLloc : '✓ centre de ' + cen.poble;
   document.getElementById('calcbtn').disabled = false;
 }
 
