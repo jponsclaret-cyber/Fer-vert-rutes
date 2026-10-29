@@ -1101,15 +1101,16 @@ function gmapsLinks(r){
 function drawMap(){
   if (!map){
     map = L.map('map');
-    const base = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-      { attribution:'© OpenStreetMap contributors © CARTO', subdomains:'abcd', maxZoom:19 }).addTo(map);
-    // recanvi: si el proveïdor principal falla, usa OpenStreetMap
+    // Mapa base de l'ICGC (dades obertes de Catalunya, sense clau). Recanvi: Esri si falla.
+    const base = L.tileLayer('https://geoserveis.icgc.cat/servei/catalunya/mapa-base/wmts/estandard/MON3857NW/{z}/{x}/{y}.png',
+      { attribution:'Cartografia © Institut Cartogràfic i Geològic de Catalunya (CC BY 4.0)', maxZoom:18 }).addTo(map);
     let swapped = false;
     base.on('tileerror', () => {
       if (swapped) return;
       swapped = true;
       map.removeLayer(base);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution:'© OpenStreetMap' }).addTo(map);
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+        { attribution:'Tiles © Esri', maxZoom:18 }).addTo(map);
     });
   }
   if (mapLayer) map.removeLayer(mapLayer);
