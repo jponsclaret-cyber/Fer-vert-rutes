@@ -70,12 +70,12 @@
     Enganxa les files del Google Sheet (id, nom, adreça, poble… — l'ordre no cal que sigui exacte).
     S'identifiquen per id de contracte o per nom.
   </div>
-  <div style="margin-bottom:10px;font-size:13px"><b>0.</b> Base de clients: <input type="file" id="dbfile" accept=".json"></div>
+  <div style="margin-bottom:10px;font-size:13px"><b>0.</b> Base de clients: <input type="file" id="dbfile" accept=".json,.enc"></div>
   <textarea id="paste" placeholder="1042	GRANJA CAN PUIG	Can Puig	Vilobí d'Onyar	Selva Interior
 1187	RAMADERIA MASNOU SL	Mas Nou	Cassà de la Selva	…"></textarea>
   <div class="row">
     <button id="analitzabtn" onclick="analitza()" disabled>Analitza el llistat</button>
-    <span id="matchpill">Selecciona primer el fitxer fervert_db.json</span>
+    <span id="matchpill">Selecciona primer el fitxer de clients (fervert_db.json.enc)</span>
   </div>
   <div id="warnbox"></div>
 </div>
@@ -669,23 +669,44 @@ function clusterByDistanceM(clientsWithMi, M, maxPerDay) {
 
 let DB = [];
 document.getElementById('dbcount').textContent = '0';
-document.getElementById('dbfile').addEventListener('change', e => {
+// Desxifra un fitxer fet amb: openssl enc -aes-256-cbc -pbkdf2 (format "Salted__" + sal de 8 bytes)
+async function decryptOpenSSL(buf, pass) {
+  const b = new Uint8Array(buf);
+  if (new TextDecoder().decode(b.slice(0, 8)) !== 'Salted__') throw new Error('format');
+  const salt = b.slice(8, 16), data = b.slice(16);
+  const km = await crypto.subtle.importKey('raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveBits']);
+  const bits = new Uint8Array(await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 10000, hash: 'SHA-256' }, km, 384));
+  const key = await crypto.subtle.importKey('raw', bits.slice(0, 32), { name: 'AES-CBC' }, false, ['decrypt']);
+  const pt = await crypto.subtle.decrypt({ name: 'AES-CBC', iv: bits.slice(32, 48) }, key, data);
+  return new TextDecoder().decode(pt);
+}
+
+function dbError(msg) {
+  document.getElementById('matchpill').innerHTML = '<span class="pill bad">' + msg + '</span>';
+}
+
+document.getElementById('dbfile').addEventListener('change', async e => {
   const f = e.target.files[0];
   if (!f) return;
-  const r = new FileReader();
-  r.onload = () => {
-    try {
-      const data = JSON.parse(r.result);
-      if (!Array.isArray(data)) throw new Error('format');
-      DB = data;
-      document.getElementById('dbcount').textContent = DB.length;
-      document.getElementById('analitzabtn').disabled = false;
-      document.getElementById('matchpill').innerHTML = '<span class="pill ok">Base carregada (' + DB.length + ' clients, només a la memòria del navegador)</span>';
-    } catch (err) {
-      document.getElementById('matchpill').innerHTML = '<span class="pill bad">Fitxer no vàlid: cal fervert_db.json</span>';
+  try {
+    let text;
+    if (/\.enc$/i.test(f.name)) {
+      const pass = window.prompt('Contrasenya del fitxer de clients:');
+      if (pass === null) return;
+      try { text = await decryptOpenSSL(await f.arrayBuffer(), pass); }
+      catch (err) { dbError('Contrasenya incorrecta o fitxer no vàlid'); return; }
+    } else {
+      text = await f.text();
     }
-  };
-  r.readAsText(f);
+    const data = JSON.parse(text);
+    if (!Array.isArray(data)) throw new Error('format');
+    DB = data;
+    document.getElementById('dbcount').textContent = DB.length;
+    document.getElementById('analitzabtn').disabled = false;
+    document.getElementById('matchpill').innerHTML = '<span class="pill ok">Base carregada (' + DB.length + ' clients, només a la memòria del navegador)</span>';
+  } catch (err) {
+    dbError('Fitxer no vàlid: cal fervert_db.json o fervert_db.json.enc');
+  }
 });
 
 const COLORS = ['#e6194b','#3cb44b','#4363d8','#f58231','#911eb4','#00a5a5','#f032e6','#808000','#9a6324','#000075','#800000','#666666'];
