@@ -48,6 +48,12 @@
   .prec-ok { background:#e8f5e9; color:#2e7d32; }
   .prec-mig { background:#fff3e0; color:#e65100; }
   .prec-baix { background:#ffebee; color:#b71c1c; }
+  #pwmodal { position:fixed; inset:0; background:rgba(0,0,0,.45); display:none; align-items:center; justify-content:center; z-index:9999; }
+  #pwmodal.open { display:flex; }
+  #pwbox { background:#fff; border-radius:10px; padding:20px; width:min(360px,90vw); box-shadow:0 8px 30px rgba(0,0,0,.3); }
+  #pwbox h3 { margin:0 0 10px; font-size:15px; color:var(--verd-fosc); }
+  #pwbox input { width:100%; font-size:20px; padding:8px 10px; letter-spacing:3px; border:1.5px solid #ccc; border-radius:6px; }
+  #pwbox .row { justify-content:flex-end; }
   footer { text-align:center; font-size:11px; color:#999; padding:14px; }
   @media print {
     header, #cfgcard, #pastecard, #mapcard, .noprint, footer { display:none !important; }
@@ -111,6 +117,17 @@
 
 </main>
 <footer>Fer-Vert · optimitzador local — les dades no surten del teu ordinador (només es carrega el mapa)</footer>
+
+<div id="pwmodal">
+  <div id="pwbox">
+    <h3>🔒 Contrasenya del fitxer de clients</h3>
+    <input type="text" id="pwinput" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <div class="row">
+      <button class="sec" id="pwcancel" type="button">Cancel·la</button>
+      <button id="pwok" type="button">Obre</button>
+    </div>
+  </div>
+</div>
 
 <script>
 // Fer-Vert rutes: matching + clustering + TSP. Pure JS, sense dependències.
@@ -681,6 +698,51 @@ async function decryptOpenSSL(buf, pass) {
   return new TextDecoder().decode(pt);
 }
 
+// Demana la contrasenya amb un camp propi: la darrera lletra es veu un instant i després es converteix en •
+function askPassword() {
+  return new Promise(resolve => {
+    const modal = document.getElementById('pwmodal'), inp = document.getElementById('pwinput');
+    let real = '', timer = null;
+    const paint = showLast => {
+      const n = real.length;
+      inp.value = '•'.repeat(showLast && n ? n - 1 : n) + (showLast && n ? real[n - 1] : '');
+      inp.dataset.shown = inp.value;
+      inp.setSelectionRange(inp.value.length, inp.value.length);
+    };
+    const onInput = () => {
+      const shown = inp.dataset.shown || '', cur = inp.value;
+      let p = 0; while (p < shown.length && p < cur.length && shown[p] === cur[p]) p++;
+      let q = 0; while (q < shown.length - p && q < cur.length - p && shown[shown.length - 1 - q] === cur[cur.length - 1 - q]) q++;
+      const inserted = cur.slice(p, cur.length - q);
+      real = real.slice(0, p) + inserted + real.slice(p + (shown.length - p - q));
+      paint(inserted.length === 1 && p + 1 === real.length);
+      clearTimeout(timer);
+      timer = setTimeout(() => paint(false), 800);
+    };
+    const finish = val => {
+      clearTimeout(timer);
+      inp.removeEventListener('input', onInput);
+      inp.removeEventListener('keydown', onKey);
+      document.getElementById('pwok').onclick = null;
+      document.getElementById('pwcancel').onclick = null;
+      modal.classList.remove('open');
+      inp.value = ''; inp.dataset.shown = ''; real = '';
+      resolve(val);
+    };
+    const onKey = ev => {
+      if (ev.key === 'Enter') { ev.preventDefault(); finish(real); }
+      else if (ev.key === 'Escape') finish(null);
+    };
+    inp.value = ''; inp.dataset.shown = '';
+    inp.addEventListener('input', onInput);
+    inp.addEventListener('keydown', onKey);
+    document.getElementById('pwok').onclick = () => finish(real);
+    document.getElementById('pwcancel').onclick = () => finish(null);
+    modal.classList.add('open');
+    inp.focus();
+  });
+}
+
 function dbError(msg) {
   document.getElementById('matchpill').innerHTML = '<span class="pill bad">' + msg + '</span>';
 }
@@ -691,7 +753,7 @@ document.getElementById('dbfile').addEventListener('change', async e => {
   try {
     let text;
     if (/\.enc$/i.test(f.name)) {
-      const pass = window.prompt('Contrasenya del fitxer de clients:');
+      const pass = await askPassword();
       if (pass === null) return;
       try { text = await decryptOpenSSL(await f.arrayBuffer(), pass); }
       catch (err) { dbError('Contrasenya incorrecta o fitxer no vàlid'); return; }
