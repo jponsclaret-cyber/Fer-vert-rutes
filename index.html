@@ -897,7 +897,9 @@ async function analitza(){
   for (const r of rows){
     let m = matchClient(r, DB);
     // amb codi REGA, el registre oficial mana per sobre d'una coincidència dubtosa per nom
-    if (m && r.marca && (m.via === 'fuzzy?' || m.via === 'fuzzy')) m = null;
+    // o d'un punt aproximat de la base (centre del poble…); si el registre falla, es torna al de la base
+    const aprox = m && ['poble', 'municipi', 'rega?', 'masia?', 'carrer?'].includes(m.client.precisio);
+    if (m && r.marca && (m.via === 'fuzzy?' || m.via === 'fuzzy' || aprox)) { if (aprox && m.via !== 'fuzzy?' && m.via !== 'fuzzy') r.base = m.client; m = null; }
     if (m){
       if (!m.client.lat || !m.client.lon){ unmatched.push({row:r, reason:'sense coordenades a la base'}); continue; }
       matched.push(m.client);
@@ -929,6 +931,7 @@ async function analitza(){
     pill.innerHTML = '<span class="pill warn">Buscant granges noves al mapa… ' + (k + 1) + '/' + unmatched.length + '</span>';
     let cen = null, g = null;
     const rg = u.row.marca && rega[u.row.marca];
+    if (!rg && u.row.base) { monthly.push(u.row.base); continue; }
     if (rg) { cen = { poble: rg.poble }; g = rg; }
     else if (u.row.poble) {
       cen = pobleCentroid(u.row.poble);
