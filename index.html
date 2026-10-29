@@ -270,11 +270,14 @@ function parsePaste(text) {
     const toks = new Set(norm(cells.join(' ')).split(' '));
     const HDR = ['contracte','client','nom','adreca','poble','comarca','municipi','zona','freq','frequencia','data','id'];
     if (HDR.filter(h => toks.has(h)).length >= 2 && !cells.some(c => /^\d{2,}$/.test(c))) continue;
-    // full "Recollides GENERAL": [0] codi, [1] clau, [2] núm. granja, [3] núm. client, [4] nom, [5] obs., [6] data…, [11] explotació, [12] POBLE
-    if (cells.length >= 13 && /^\d{1,2}-\d{1,2}-\d{2,4}$/.test(cells[6])) {
-      const ids = [cells[2], cells[3]].map(c => (c.match(/^\d+/) || [''])[0]).filter(Boolean);
-      const nom = cells[4], adreca = cells[11], poble = cells[12];
-      rows.push({ sheet: true, ids, id: ids[0], nom, adreca, poble, extra: cells[5],
+    // full "Recollides GENERAL": ... nom, obs., DATA, tipus, DATA, tipus, freq., explotació, POBLE
+    // (amb o sense les columnes de codi, clau, núm. granja i núm. client al davant)
+    const DATA = /^\d{1,2}-\d{1,2}-\d{2,4}$/;
+    const d = cells.findIndex(c => DATA.test(c));
+    if (d >= 2 && DATA.test(cells[d + 2] || '') && cells.length >= d + 7) {
+      const ids = cells.slice(Math.max(0, d - 4), d - 2).map(c => (c.match(/^\d+/) || [''])[0]).filter(Boolean);
+      const nom = cells[d - 2], adreca = cells[d + 5], poble = cells[d + 6];
+      rows.push({ sheet: true, ids, id: ids[0] || '', nom, adreca, poble, extra: cells[d - 1],
         raw: [nom, adreca, poble].filter(Boolean).join(' · ') });
       continue;
     }
@@ -912,7 +915,7 @@ async function analitza(){
       const c = { id:u.row.id||'', nom:u.row.nom||u.row.raw.slice(0,40), adreca:u.row.adreca||'',
         poble:cen.poble, zona:g.zona||'', lat:g.lat, lon:g.lon, precisio:g.precisio };
       monthly.push(c);
-      if (g.precisio === 'masia') located.push({ row:u.row, nomLloc:g.nomLloc });
+      if (g.precisio === 'masia' || g.precisio === 'carrer') located.push({ row:u.row, nomLloc:g.nomLloc });
       else fuzzy.push({ row:u.row, client:{ nom:g.nomLloc, poble:cen.poble }, via:'mapa' });
     } else {
       u.cen = cen;
@@ -1007,6 +1010,14 @@ async function icgc(text){
 // 1r: nom exacte (sense articles ni "Mas/Can…") a ≤ 8 km del poble -> 'masia'.
 // 2n: nom amb una lletra de diferència (Rubaix/Ruaix) -> 'masia?', cal confirmar.
 async function geocodeGranja(row, cen){
+  // adreça de carrer ("C/Ermita de Sant Francesc, 5"): cerca postal al mateix municipi (l'ICGC tolera faltes)
+  const adr = String(row.adreca || '').trim();
+  if (/^(c\/|c\.|carrer|ctra|carretera|av\.?|avinguda|pl\.?|plaça|pg\.?|passeig)\s*/i.test(adr)) {
+    const q = adr.replace(/^c[\/.]\s*/i, 'Carrer ') + ', ' + cen.poble;
+    const f = (await icgc(q)).find(f => f.properties.layer === 'address' && norm(f.properties.municipi) === norm(cen.poble));
+    if (f) return { nomLloc: f.properties.etiqueta || f.properties.nom, zona: f.properties.comarca || cen.zona || '',
+      lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], precisio: 'carrer' };
+  }
   let probable = null;
   for (const nom of nomsGranja(row)) {
     const core = coreLloc(nom);
