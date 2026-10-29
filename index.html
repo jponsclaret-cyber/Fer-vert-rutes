@@ -128,7 +128,7 @@
 </div>
 
 </main>
-<footer>Fer-Vert · optimitzador local — la base de clients no surt del teu ordinador. Només s'envien coordenades (càlcul de rutes) i noms de pobles i masies (geocodificador ICGC), mai noms de persones.</footer>
+<footer>Fer-Vert · optimitzador local — la base de clients no surt del teu ordinador. Només s'envien coordenades (càlcul de rutes), codis d'explotació (registre REGA) i noms de pobles i masies (geocodificador ICGC), mai noms de persones.</footer>
 
 <div id="pwmodal">
   <div id="pwbox">
@@ -277,7 +277,10 @@ function parsePaste(text) {
     if (d >= 2 && DATA.test(cells[d + 2] || '') && cells.length >= d + 7) {
       const ids = cells.slice(Math.max(0, d - 4), d - 2).map(c => (c.match(/^\d+/) || [''])[0]).filter(Boolean);
       const nom = cells[d - 2], adreca = cells[d + 5], poble = cells[d + 6];
-      rows.push({ sheet: true, ids, id: ids[0] || '', nom, adreca, poble, extra: cells[d - 1],
+      // marca oficial del registre ramader (REGA): al full surt sense el 4t dígit (216AT = 2160AT)
+      const mk = cells.slice(d + 7).find(c => /^\d{3,4}[A-Z]{2}$/.test(c));
+      const marca = mk ? (mk.length === 5 ? mk.slice(0, 3) + '0' + mk.slice(3) : mk) : '';
+      rows.push({ sheet: true, ids, id: ids[0] || '', nom, adreca, poble, marca, extra: cells[d - 1],
         raw: [nom, adreca, poble].filter(Boolean).join(' · ') });
       continue;
     }
@@ -902,11 +905,19 @@ async function analitza(){
   const located = [], pending = [];
   const calcbtn = document.getElementById('calcbtn'), anbtn = document.getElementById('analitzabtn');
   calcbtn.disabled = true; anbtn.disabled = true;
+  let rega = {};
+  const marques = [...new Set(unmatched.map(u => u.row.marca).filter(Boolean))];
+  if (marques.length) {
+    pill.innerHTML = '<span class="pill warn">Consultant el registre ramader (REGA)…</span>';
+    try { rega = await regaLookup(marques); } catch (e) { rega = {}; }
+  }
   for (let k = 0; k < unmatched.length; k++){
     const u = unmatched[k];
     pill.innerHTML = '<span class="pill warn">Buscant granges noves al mapa… ' + (k + 1) + '/' + unmatched.length + '</span>';
     let cen = null, g = null;
-    if (u.row.poble) {
+    const rg = u.row.marca && rega[u.row.marca];
+    if (rg) { cen = { poble: rg.poble }; g = rg; }
+    else if (u.row.poble) {
       cen = pobleCentroid(u.row.poble);
       if (!cen) { try { cen = await geocodePoble(u.row.poble); } catch (e) { cen = null; } }
       if (cen) { try { g = await geocodeGranja(u.row, cen); } catch (e) { g = null; } }
@@ -915,7 +926,7 @@ async function analitza(){
       const c = { id:u.row.id||'', nom:u.row.nom||u.row.raw.slice(0,40), adreca:u.row.adreca||'',
         poble:cen.poble, zona:g.zona||'', lat:g.lat, lon:g.lon, precisio:g.precisio };
       monthly.push(c);
-      if (g.precisio === 'masia' || g.precisio === 'carrer') located.push({ row:u.row, nomLloc:g.nomLloc });
+      if (g.precisio === 'masia' || g.precisio === 'carrer' || g.precisio === 'rega') located.push({ row:u.row, nomLloc:g.nomLloc, rega:g.precisio === 'rega' });
       else fuzzy.push({ row:u.row, client:{ nom:g.nomLloc, poble:cen.poble }, via:'mapa' });
     } else {
       u.cen = cen;
@@ -929,7 +940,7 @@ async function analitza(){
     (pending.length ? ' · ' + pending.length + ' pendents' : '') + '</span>';
   if (located.length){
     html += '<details><summary><span class="pill ok">✓ ' + located.length + ' granges noves localitzades al mapa</span></summary><ul>' +
-      located.map(l => '<li>' + esc(l.row.nom) + ' → <b>' + esc(l.nomLloc) + '</b> (' + esc(l.row.poble) + ')</li>').join('') + '</ul></details>';
+      located.map(l => '<li>' + esc(l.row.nom) + ' → <b>' + esc(l.nomLloc) + '</b> (' + esc(l.row.poble) + ')' + (l.rega ? ' · registre oficial' : '') + '</li>').join('') + '</ul></details>';
   }
   if (fuzzy.length){
     html += '<div><span class="pill warn">Verificar (' + fuzzy.length + ' per similitud de nom)</span><ul>' +
@@ -961,6 +972,22 @@ function pobleCentroid(poble){
     lat: hits.reduce((s,c)=>s+c.lat,0)/hits.length,
     lon: hits.reduce((s,c)=>s+c.lon,0)/hits.length
   };
+}
+
+// coordenades oficials del Registre d'explotacions ramaderes (dades obertes Generalitat). Només s'envien els codis.
+async function regaLookup(marques){
+  const out = {};
+  if (!marques.length) return out;
+  const dms = t => { const v = String(t).match(/[\d.]+/g).map(Number); return v[0] + v[1] / 60 + v[2] / 3600; };
+  const where = 'marca_oficial in(' + marques.map(m => "'" + m.replace(/[^0-9A-Z]/g, '') + "'").join(',') + ')';
+  const r = await fetch('https://analisi.transparenciacatalunya.cat/resource/7bpt-5azk.json?$limit=5000' +
+    '&$select=marca_oficial,nom_explotaci,municipi,comarca,latitud,longitud&$where=' + encodeURIComponent(where));
+  for (const x of await r.json()) {
+    if (out[x.marca_oficial] || !x.latitud || !x.longitud) continue;
+    out[x.marca_oficial] = { nomLloc: x.nom_explotaci, poble: x.municipi, zona: x.comarca || '',
+      lat: dms(x.latitud), lon: dms(x.longitud), precisio: 'rega' };
+  }
+  return out;
 }
 
 // centre del municipi via geocodificador de l'ICGC (només s'envia el nom del poble)
