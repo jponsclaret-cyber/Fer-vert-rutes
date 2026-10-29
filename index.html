@@ -117,13 +117,12 @@
     </div>
   </div>
   <div class="card" id="mapcard">
-    <div class="row noprint" style="margin:0 0 10px">
-      <b style="font-size:13px">Rutes al mapa:</b>
-      <button class="sec mini" type="button" onclick="selectAllRoutes(true)">Totes</button>
-      <button class="sec mini" type="button" onclick="selectAllRoutes(false)">Cap</button>
-      <span style="font-size:12px;color:#888">Marca o desmarca la casella de cada ruta (a sota del mapa) per veure'n una, dues o totes.</span>
-    </div>
     <div id="map"></div>
+    <div class="row noprint" style="margin:12px 0 0">
+      <button type="button" onclick="selectAllRoutes(false)">✖ Desactiva totes les rutes</button>
+      <button class="sec" type="button" onclick="selectAllRoutes(true)">Activa-les totes</button>
+      <span style="font-size:12px;color:#888">Després marca la casella de cada ruta (a sota) per anar-les afegint al mapa.</span>
+    </div>
   </div>
   <div class="rutes" id="rutes"></div>
 </div>
