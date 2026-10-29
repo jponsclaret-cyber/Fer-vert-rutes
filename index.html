@@ -1101,8 +1101,16 @@ function gmapsLinks(r){
 function drawMap(){
   if (!map){
     map = L.map('map');
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-      { attribution:'© OpenStreetMap' }).addTo(map);
+    const base = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+      { attribution:'© OpenStreetMap contributors © CARTO', subdomains:'abcd', maxZoom:19 }).addTo(map);
+    // recanvi: si el proveïdor principal falla, usa OpenStreetMap
+    let swapped = false;
+    base.on('tileerror', () => {
+      if (swapped) return;
+      swapped = true;
+      map.removeLayer(base);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution:'© OpenStreetMap' }).addTo(map);
+    });
   }
   if (mapLayer) map.removeLayer(mapLayer);
   mapLayer = L.layerGroup().addTo(map);
