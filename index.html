@@ -270,15 +270,24 @@ function parsePaste(text) {
     const toks = new Set(norm(cells.join(' ')).split(' '));
     const HDR = ['contracte','client','nom','adreca','poble','comarca','municipi','zona','freq','frequencia','data','id'];
     if (HDR.filter(h => toks.has(h)).length >= 2 && !cells.some(c => /^\d{2,}$/.test(c))) continue;
+    // títol de ruta o de bloc ("OSONA 1 - DL 02/11/26", "PIRENAICA COOPE"): 1-2 cel·les en majúscules, sense números de client
+    const plenes = cells.filter(c => c);
+    if (plenes.length <= 2 && !/[a-zà-ÿ]/.test(plenes.join(' ')) && !plenes.some(c => /^\d+$/.test(c))) continue;
     // full "Recollides GENERAL": ... nom, obs., DATA, tipus, DATA, tipus, freq., explotació, POBLE
     // (amb o sense les columnes de codi, clau, núm. granja i núm. client al davant)
     const DATA = /^\d{1,2}-\d{1,2}-\d{2,4}$/;
     const d = cells.findIndex(c => DATA.test(c));
-    if (d >= 2 && DATA.test(cells[d + 2] || '') && cells.length >= d + 7) {
+    const MAJ = c => /^[^a-zà-ÿ0-9]*[A-ZÀ-Ý]{2}[^a-zà-ÿ0-9]*$/.test(c || '');   // POBLE: tot majúscules, sense xifres
+    // poble a la seva posició (d+6); si la fila ve desquadrada (sense data de propera recollida…), el primer en majúscules després
+    let pb = MAJ(cells[d + 6]) ? d + 6 : -1;
+    if (pb < 0 && d >= 2) for (let k = d + 3; k <= d + 9 && k < cells.length; k++) if (MAJ(cells[k])) { pb = k; break; }
+    if (d >= 2 && pb > 0) {
       const ids = cells.slice(Math.max(0, d - 4), d - 2).map(c => (c.match(/^\d+/) || [''])[0]).filter(Boolean);
-      const nom = cells[d - 2], adreca = cells[d + 5], poble = cells[d + 6];
+      const prev = cells[pb - 1] || '';
+      const nom = cells[d - 2], poble = cells[pb];
+      const adreca = (pb - 1 > d + 1 && !/^\d+([.,]\d+)?$/.test(prev) && !DATA.test(prev) && !/^(no )?rec|^alta|^baixa/i.test(prev)) ? prev : '';
       // marca oficial del registre ramader (REGA): al full surt sense el 4t dígit (216AT = 2160AT)
-      const mk = cells.slice(d + 7).find(c => /^\d{3,4}[A-Z]{2}$/.test(c));
+      const mk = cells.slice(pb + 1).find(c => /^\d{3,4}[A-Z]{2}$/.test(c));
       const marca = mk ? (mk.length === 5 ? mk.slice(0, 3) + '0' + mk.slice(3) : mk) : '';
       rows.push({ sheet: true, ids, id: ids[0] || '', nom, adreca, poble, marca, extra: cells[d - 1],
         raw: [nom, adreca, poble].filter(Boolean).join(' · ') });
@@ -884,7 +893,9 @@ async function analitza(){
   const matched = [];
   const fuzzy = [], unmatched = [];
   for (const r of rows){
-    const m = matchClient(r, DB);
+    let m = matchClient(r, DB);
+    // amb codi REGA, el registre oficial mana per sobre d'una coincidència dubtosa per nom
+    if (m && r.marca && (m.via === 'fuzzy?' || m.via === 'fuzzy')) m = null;
     if (m){
       if (!m.client.lat || !m.client.lon){ unmatched.push({row:r, reason:'sense coordenades a la base'}); continue; }
       matched.push(m.client);
