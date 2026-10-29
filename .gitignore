@@ -1,0 +1,7 @@
+# Dades personals i confidencials: MAI al repositori
+fervert_db.json
+fervert_db_*.json
+!fervert_db_pseudonimitzada.json
+*.xlsx
+*.csv
+*.enc
