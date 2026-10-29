@@ -92,9 +92,9 @@
     <label class="cfg" style="font-size:15px">Clients per dia <input type="number" id="maxper" value="18" min="3" max="40" style="width:74px;font-size:15px"></label>
     <label class="cfg" style="font-size:15px">Màx. km per dia <input type="number" id="maxkm" value="300" min="50" max="1000" step="10" style="width:80px;font-size:15px"></label>
     <label class="cfg" style="font-size:15px">Repartiment
-      <select id="mode" onchange="refreshZoneBox()" style="font-size:15px">
+      <select id="mode" style="font-size:15px">
         <option value="auto">Mínim de km (automàtic)</option>
-        <option value="zones">Per zones (Nord-Est / Sud-Oest)</option>
+        <option value="zones">Per zones (Empordà / Girona i Sud)</option>
       </select></label>
     <button id="calcbtn" onclick="calcula()" disabled>Calcula les rutes</button>
     <span id="status" style="font-size:13px;color:#e65100;font-weight:600"></span>
@@ -103,12 +103,6 @@
     El sistema agrupa per <b>zones</b> i optimitza per <b>km reals de carretera</b> (via OpenStreetMap), buscant el
     <b>mínim de km totals del mes</b>. Cada ruta = un dia = un camió, i respecta els dos límits: nombre de clients <b>i</b> km per dia
     (afegeix dies si cal). Deixa el km en blanc o 0 per no limitar.
-  </div>
-  <div id="zonebox" style="display:none;margin-top:10px;padding:10px 12px;background:#e8f5e9;border-radius:8px;font-size:13px">
-    <b>Zona Nord-Est</b> (les marcades; la resta = Sud-Oest). Cada zona es calcula per separat: cap dia barreja les dues.
-    <div id="zonelist" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px 16px"></div>
-    <div style="color:#666;margin-top:6px">Normalment surt <b>1-3 % més de km</b> que el mode automàtic (a canvi de dies més previsibles per zona).
-    Els clients sense comarca s'assignen segons la direcció respecte al dipòsit.</div>
   </div>
   <input type="hidden" id="osrm" value="on">
 </div>
@@ -847,7 +841,6 @@ function carregaTots(){
     '<span class="pill ok">' + monthly.length + ' clients carregats' + (d.dups ? ' · ' + d.dups + ' repetits fusionats' : '') + '</span>';
   document.getElementById('warnbox').innerHTML = '';
   document.getElementById('calcbtn').disabled = false;
-  refreshZoneBox();
 }
 
 function analitza(){
@@ -893,7 +886,6 @@ function analitza(){
   }
   document.getElementById('warnbox').innerHTML = html;
   document.getElementById('calcbtn').disabled = monthly.length === 0;
-  refreshZoneBox();
 }
 
 function pobleCentroid(poble){
@@ -942,30 +934,15 @@ async function calcula(){
   }
 }
 
-// ---- mode per zones ----
-const ZONES_NE_DEFAULT = ['Alt Empordà', "Pla de l'Estany", 'Eix Empordà', 'Mig Empordà', 'Garrotxa'];
-const zoneNE = {};   // comarca -> true si va a la zona Nord-Est
+// ---- mode per zones (fixes) ----
+// Nord-Est = Empordà (Alt, Mig, Eix) + Pla de l'Estany + Garrotxa. Resta = Sud-Oest.
+const ZONES_NE = ['Alt Empordà', "Pla de l'Estany", 'Eix Empordà', 'Mig Empordà', 'Garrotxa'];
 
 function zoneOfClient(c){
   const z = (c.zona || '').trim();
-  if (z && z in zoneNE) return zoneNE[z] ? 'NE' : 'SW';
+  if (z) return ZONES_NE.includes(z) ? 'NE' : 'SW';
   const a = angleDeg(c);          // sense comarca: sector 30°-145° (est→nord→nord-oest) = Nord-Est
   return (a >= 30 && a <= 145) ? 'NE' : 'SW';
-}
-
-function refreshZoneBox(){
-  const zonesMode = document.getElementById('mode').value === 'zones';
-  const box = document.getElementById('zonebox');
-  box.style.display = zonesMode ? '' : 'none';
-  if (!zonesMode) return;
-  const present = {};
-  monthly.forEach(c => { const z = (c.zona || '').trim(); if (z) present[z] = (present[z] || 0) + 1; });
-  Object.keys(present).forEach(z => { if (!(z in zoneNE)) zoneNE[z] = ZONES_NE_DEFAULT.includes(z); });
-  const names = Object.keys(present).sort((a, b) => present[b] - present[a]);
-  document.getElementById('zonelist').innerHTML = names.length ? names.map(z =>
-    '<label style="cursor:pointer"><input type="checkbox" ' + (zoneNE[z] ? 'checked ' : '') +
-    'onchange="zoneNE[this.dataset.z]=this.checked" data-z="' + esc(z) + '" style="accent-color:#2e7d32"> ' + esc(z) + ' (' + present[z] + ')</label>'
-  ).join('') : '<span style="color:#888">Carrega primer els clients del mes.</span>';
 }
 
 function getMaxKm(){ const v = +document.getElementById('maxkm').value; return v > 0 ? v : Infinity; }
@@ -987,7 +964,6 @@ async function calculaOSRM(){
   let idxRoutes;
   lastRouteZones = [];
   if (document.getElementById('mode').value === 'zones') {
-    refreshZoneBox();
     idxRoutes = [];
     for (const z of ['NE', 'SW']) {
       const part = all.filter(c => zoneOfClient(monthly[c.mi - 1]) === z);
