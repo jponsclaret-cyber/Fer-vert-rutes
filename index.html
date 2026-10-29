@@ -837,8 +837,8 @@ function esc(s){ const d=document.createElement('div'); d.textContent=s==null?''
 function precBadge(c){
   const p = c.precisio || '';
   if (!p) return '';
-  const cls = (p === 'municipi') ? 'prec-baix' : (p === 'poble' || p === 'rega?' || p === 'masia?') ? 'prec-mig' : 'prec-ok';
-  const tit = { masia:'masia exacta (nomenclàtor ICGC)', rega:'registre oficial ramader (REGA)', 'rega?':'REGA probable, pendent confirmar', 'masia?':'masia probable (nom gairebé igual), pendent confirmar', carrer:'adreça de carrer exacta', poble:'aproximat: centre del poble', municipi:'aproximat: centre del municipi' }[p] || p;
+  const cls = (p === 'municipi') ? 'prec-baix' : (p === 'poble' || p === 'rega?' || p === 'masia?' || p === 'carrer?') ? 'prec-mig' : 'prec-ok';
+  const tit = { masia:'masia exacta (nomenclàtor ICGC)', exacte:'lloc exacte (nomenclàtor ICGC o adreça verificada)', 'carrer?':'carrer correcte, número o nau aproximats', rega:'registre oficial ramader (REGA)', 'rega?':'REGA probable, pendent confirmar', 'masia?':'masia probable (nom gairebé igual), pendent confirmar', carrer:'adreça de carrer exacta', poble:'aproximat: centre del poble', municipi:'aproximat: centre del municipi' }[p] || p;
   return ' <span class="prec ' + cls + '" title="' + tit + '">' + esc(p) + '</span>';
 }
 
