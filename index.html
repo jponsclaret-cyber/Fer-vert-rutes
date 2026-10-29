@@ -209,7 +209,29 @@ function pickBest(cands, row) {
   return best;
 }
 
+// Format "Recollides GENERAL": un mateix client (id/nom) pot tenir moltes granges a pobles diferents,
+// així que només s'accepta una coincidència si la granja és al mateix poble.
+function matchSheetRow(row, db) {
+  const pt = tokens(row.poble);
+  const locOk = c => pt.length > 0 && pt.some(t => tokens(c.poble).some(d => tokMatch(t, d)));
+  const byId = db.filter(c => row.ids.includes(String(c.id)));
+  const rn = norm(row.nom);
+  const byNom = rn ? db.filter(c => norm(c.nom) === rn) : [];
+  const cands = [...new Set(byId.concat(byNom))].filter(locOk);
+  if (cands.length) return { client: pickBest(cands, row), via: byId.includes(cands[0]) ? 'id' : 'nom' };
+  const rowText = [row.nom, row.adreca, row.poble].filter(Boolean).join(' ');
+  let best = null, bestS = 0, second = 0;
+  for (const c of db.filter(locOk)) {
+    const sc = matchScore(rowText, c);
+    if (sc > bestS) { second = bestS; bestS = sc; best = c; }
+    else if (sc > second) second = sc;
+  }
+  if (best && bestS >= 0.6) return { client: best, via: bestS - second >= 0.15 ? 'fuzzy' : 'fuzzy?', score: bestS };
+  return null;
+}
+
 function matchClient(row, db) {
+  if (row.sheet) return matchSheetRow(row, db);
   // 1) id exacte
   if (row.id) {
     const hits = db.filter(c => String(c.id) === String(row.id));
@@ -248,6 +270,14 @@ function parsePaste(text) {
     const toks = new Set(norm(cells.join(' ')).split(' '));
     const HDR = ['contracte','client','nom','adreca','poble','comarca','municipi','zona','freq','frequencia','data','id'];
     if (HDR.filter(h => toks.has(h)).length >= 2 && !cells.some(c => /^\d{2,}$/.test(c))) continue;
+    // full "Recollides GENERAL": [0] codi, [1] clau, [2] núm. granja, [3] núm. client, [4] nom, [5] obs., [6] data…, [11] explotació, [12] POBLE
+    if (cells.length >= 13 && /^\d{1,2}-\d{1,2}-\d{2,4}$/.test(cells[6])) {
+      const ids = [cells[2], cells[3]].map(c => (c.match(/^\d+/) || [''])[0]).filter(Boolean);
+      const nom = cells[4], adreca = cells[11], poble = cells[12];
+      rows.push({ sheet: true, ids, id: ids[0], nom, adreca, poble, extra: cells[5],
+        raw: [nom, adreca, poble].filter(Boolean).join(' · ') });
+      continue;
+    }
     const row = { raw: line };
     // id = primera cel·la totalment numèrica
     const idIdx = cells.findIndex(c => /^\d+$/.test(c));
@@ -874,13 +904,13 @@ function analitza(){
       '</ul></div>';
   }
   if (unmatched.length){
-    html += '<div><span class="pill bad">No geolocalitzats — s\'exclouen del càlcul</span><ul id="unmatchedlist">' +
-      unmatched.map((u,i) => {
-        const pobleHit = pobleCentroid(u.row.poble);
-        return '<li>' + esc(u.row.raw.slice(0,90)) + ' <i>(' + u.reason + ')</i> ' +
-          (pobleHit ? '<button class="mini" onclick="afegeixPoble(' + i + ')">＋ afegir al centre de ' + esc(pobleHit.poble) + '</button>' : '') +
-          '</li>';
-      }).join('') + '</ul></div>';
+    html += '<div><span class="pill bad">No geolocalitzats — s\'exclouen del càlcul</span> ' +
+      (unmatched.filter(u => u.row.poble).length > 1 ? '<button class="mini" onclick="afegeixTotsPobles()">＋ afegeix-los tots al centre del seu poble</button>' : '') +
+      '<ul id="unmatchedlist">' +
+      unmatched.map((u,i) =>
+        '<li>' + esc(u.row.raw.slice(0,90)) + ' <i>(' + u.reason + ')</i> ' +
+        (u.row.poble ? '<button class="mini addp" data-i="' + i + '" onclick="afegeixPoble(' + i + ', this)">＋ afegir al centre de ' + esc(u.row.poble) + '</button>' : '') +
+        '</li>').join('') + '</ul></div>';
     window._unmatched = unmatched;
   }
   document.getElementById('warnbox').innerHTML = html;
@@ -899,16 +929,37 @@ function pobleCentroid(poble){
   };
 }
 
-function afegeixPoble(i){
+// centre del municipi via geocodificador de l'ICGC (només s'envia el nom del poble)
+async function geocodePoble(poble){
+  // cal que el nom del resultat coincideixi amb el poble (sinó, el geocodificador retorna coses semblants: Beulaigua→Bellaguarda)
+  const queries = [poble, poble.replace(/\s+(de|del|d')\s*.*$/i, '')].filter((q, k, a) => q && a.indexOf(q) === k);
+  for (const q of queries) {
+    const r = await fetch('https://eines.icgc.cat/geocodificador/cerca?limit=8&text=' + encodeURIComponent(q));
+    const j = await r.json();
+    const hits = (j.features || []).filter(f => f.properties.layer !== 'address' && norm(f.properties.nom) === norm(q));
+    const f = hits.find(f => f.properties.addendum && f.properties.addendum.tipus === 'Cap de municipi') || hits[0];
+    if (f) return { poble: f.properties.nom, zona: f.properties.comarca || '', lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] };
+  }
+  return null;
+}
+
+async function afegeixPoble(i, btn){
   const u = window._unmatched[i];
-  const cen = pobleCentroid(u.row.poble);
-  if (!cen) return;
+  if (u.added) return;
+  btn.disabled = true; btn.textContent = '…';
+  let cen = pobleCentroid(u.row.poble);
+  if (!cen) { try { cen = await geocodePoble(u.row.poble); } catch (e) { cen = null; } }
+  if (!cen) { btn.textContent = '⚠ poble no trobat'; return; }
+  u.added = true;
   monthly.push({ id:u.row.id||'', nom:u.row.nom||u.row.raw.slice(0,40), adreca:u.row.adreca||'',
-    poble:cen.poble, zona:'', lat:cen.lat, lon:cen.lon, precisio:'poble' });
+    poble:cen.poble, zona:cen.zona||'', lat:cen.lat, lon:cen.lon, precisio:'poble' });
   document.getElementById('matchpill').innerHTML = '<span class="pill ok">' + monthly.length + ' identificats</span>';
-  event.target.textContent = '✓ afegit';
-  event.target.disabled = true;
+  btn.textContent = '✓ afegit';
   document.getElementById('calcbtn').disabled = false;
+}
+
+async function afegeixTotsPobles(){
+  for (const b of [...document.querySelectorAll('#unmatchedlist button.addp:not(:disabled)')]) await afegeixPoble(+b.dataset.i, b);
 }
 
 let lastGeoms = [];      // geometria real per carretera de cada ruta (o null)
