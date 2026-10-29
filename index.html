@@ -872,7 +872,7 @@ function carregaTots(){
   document.getElementById('calcbtn').disabled = false;
 }
 
-function analitza(){
+async function analitza(){
   const text = document.getElementById('paste').value;
   const rows = parsePaste(text);
   const matched = [];
@@ -893,28 +893,59 @@ function analitza(){
   // treu de la llista de "verificar" els que hagin quedat fusionats
   const kept = new Set(monthly);
   for (let i = fuzzy.length - 1; i >= 0; i--) if (!kept.has(fuzzy[i].client)) fuzzy.splice(i, 1);
-  let html = '';
+
+  // granges que no són a la base: es busquen al mapa (ICGC) automàticament
   const pill = document.getElementById('matchpill');
-  pill.innerHTML = '<span class="pill ' + (unmatched.length ? 'warn' : 'ok') + '">' +
+  const located = [], pending = [];
+  const calcbtn = document.getElementById('calcbtn'), anbtn = document.getElementById('analitzabtn');
+  calcbtn.disabled = true; anbtn.disabled = true;
+  for (let k = 0; k < unmatched.length; k++){
+    const u = unmatched[k];
+    pill.innerHTML = '<span class="pill warn">Buscant granges noves al mapa… ' + (k + 1) + '/' + unmatched.length + '</span>';
+    let cen = null, g = null;
+    if (u.row.poble) {
+      cen = pobleCentroid(u.row.poble);
+      if (!cen) { try { cen = await geocodePoble(u.row.poble); } catch (e) { cen = null; } }
+      if (cen) { try { g = await geocodeGranja(u.row, cen); } catch (e) { g = null; } }
+    }
+    if (g) {
+      const c = { id:u.row.id||'', nom:u.row.nom||u.row.raw.slice(0,40), adreca:u.row.adreca||'',
+        poble:cen.poble, zona:g.zona||'', lat:g.lat, lon:g.lon, precisio:g.precisio };
+      monthly.push(c);
+      if (g.precisio === 'masia') located.push({ row:u.row, nomLloc:g.nomLloc });
+      else fuzzy.push({ row:u.row, client:{ nom:g.nomLloc, poble:cen.poble }, via:'mapa' });
+    } else {
+      u.cen = cen;
+      pending.push(u);
+    }
+  }
+
+  let html = '';
+  pill.innerHTML = '<span class="pill ' + (pending.length ? 'warn' : 'ok') + '">' +
     monthly.length + ' identificats' + (dups ? ' · ' + dups + ' repetits fusionats' : '') +
-    (unmatched.length ? ' · ' + unmatched.length + ' pendents' : '') + '</span>';
+    (pending.length ? ' · ' + pending.length + ' pendents' : '') + '</span>';
+  if (located.length){
+    html += '<details><summary><span class="pill ok">✓ ' + located.length + ' granges noves localitzades al mapa</span></summary><ul>' +
+      located.map(l => '<li>' + esc(l.row.nom) + ' → <b>' + esc(l.nomLloc) + '</b> (' + esc(l.row.poble) + ')</li>').join('') + '</ul></details>';
+  }
   if (fuzzy.length){
     html += '<div><span class="pill warn">Verificar (' + fuzzy.length + ' per similitud de nom)</span><ul>' +
-      fuzzy.map(f => '<li>«' + esc(f.row.nom) + '» → <b>' + esc(f.client.nom) + '</b> (' + esc(f.client.poble) + ')</li>').join('') +
+      fuzzy.map(f => '<li>«' + esc(f.row.nom) + (f.via === 'mapa' && f.row.adreca ? ' · ' + esc(f.row.adreca) : '') + '» → <b>' + esc(f.client.nom) + '</b> (' + esc(f.client.poble) + ')</li>').join('') +
       '</ul></div>';
   }
-  if (unmatched.length){
-    html += '<div><span class="pill bad">No geolocalitzats — s\'exclouen del càlcul</span> ' +
-      (unmatched.filter(u => u.row.poble).length > 1 ? '<button class="mini" onclick="afegeixTotsPobles()">📍 localitza-les totes</button>' : '') +
+  if (pending.length){
+    html += '<div><span class="pill bad">No trobats al mapa — s\'exclouen del càlcul</span> ' +
+      (pending.filter(u => u.cen).length > 1 ? '<button class="mini" onclick="afegeixTotsPobles()">＋ afegeix-los tots al centre del seu poble</button>' : '') +
       '<ul id="unmatchedlist">' +
-      unmatched.map((u,i) =>
-        '<li>' + esc(u.row.raw.slice(0,90)) + ' <i>(' + u.reason + ')</i> ' +
-        (u.row.poble ? '<button class="mini addp" data-i="' + i + '" onclick="afegeixPoble(' + i + ', this)">📍 localitzar (granja o centre de ' + esc(u.row.poble) + ')</button>' : '') +
+      pending.map((u,i) =>
+        '<li>' + esc(u.row.raw.slice(0,90)) + ' <i>(' + (u.cen ? 'granja no trobada' : u.row.poble ? 'poble no trobat' : u.reason) + ')</i> ' +
+        (u.cen ? '<button class="mini addp" data-i="' + i + '" onclick="afegeixPoble(' + i + ', this)">＋ afegir al centre de ' + esc(u.cen.poble) + '</button>' : '') +
         '</li>').join('') + '</ul></div>';
-    window._unmatched = unmatched;
   }
+  window._unmatched = pending;
   document.getElementById('warnbox').innerHTML = html;
-  document.getElementById('calcbtn').disabled = monthly.length === 0;
+  calcbtn.disabled = monthly.length === 0;
+  anbtn.disabled = false;
 }
 
 function pobleCentroid(poble){
@@ -995,25 +1026,20 @@ async function geocodeGranja(row, cen){
   return probable;
 }
 
-async function afegeixPoble(i, btn){
+function afegeixPoble(i, btn){
   const u = window._unmatched[i];
-  if (u.added) return;
-  btn.disabled = true; btn.textContent = '…';
-  let cen = pobleCentroid(u.row.poble);
-  if (!cen) { try { cen = await geocodePoble(u.row.poble); } catch (e) { cen = null; } }
-  if (!cen) { btn.textContent = '⚠ poble no trobat'; return; }
-  let g = null;
-  try { g = await geocodeGranja(u.row, cen); } catch (e) { g = null; }
+  if (u.added || !u.cen) return;
   u.added = true;
   monthly.push({ id:u.row.id||'', nom:u.row.nom||u.row.raw.slice(0,40), adreca:u.row.adreca||'',
-    poble:cen.poble, zona:(g ? g.zona : cen.zona)||'', lat:g ? g.lat : cen.lat, lon:g ? g.lon : cen.lon, precisio:g ? g.precisio : 'poble' });
+    poble:u.cen.poble, zona:u.cen.zona||'', lat:u.cen.lat, lon:u.cen.lon, precisio:'poble' });
   document.getElementById('matchpill').innerHTML = '<span class="pill ok">' + monthly.length + ' identificats</span>';
-  btn.textContent = g ? (g.precisio === 'masia' ? '✓ granja trobada: ' : '✓ probable (verifica): ') + g.nomLloc : '✓ centre de ' + cen.poble;
+  btn.disabled = true;
+  btn.textContent = '✓ afegit al centre de ' + u.cen.poble;
   document.getElementById('calcbtn').disabled = false;
 }
 
 async function afegeixTotsPobles(){
-  for (const b of [...document.querySelectorAll('#unmatchedlist button.addp:not(:disabled)')]) await afegeixPoble(+b.dataset.i, b);
+  for (const b of [...document.querySelectorAll('#unmatchedlist button.addp:not(:disabled)')]) afegeixPoble(+b.dataset.i, b);
 }
 
 let lastGeoms = [];      // geometria real per carretera de cada ruta (o null)
