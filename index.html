@@ -212,8 +212,13 @@ function pickBest(cands, row) {
 // Format "Recollides GENERAL": un mateix client (id/nom) pot tenir moltes granges a pobles diferents,
 // així que només s'accepta una coincidència si la granja és al mateix poble.
 function matchSheetRow(row, db) {
+  // codi de granja (marca REGA) desat a la base: coincidència exacta
+  if (row.marca) {
+    const hit = db.find(c => c.marca === row.marca);
+    if (hit) return { client: hit, via: 'id' };
+  }
   const pt = tokens(row.poble);
-  const locOk = c => pt.length > 0 && pt.some(t => tokens(c.poble).some(d => tokMatch(t, d)));
+  const locOk = c => norm(row.poble) === norm(c.poble) || (pt.length > 0 && pt.some(t => tokens(c.poble).some(d => tokMatch(t, d))));   // Vic, Pi, Ger…: noms curts
   const byId = db.filter(c => row.ids.includes(String(c.id)));
   const rn = norm(row.nom);
   const byNom = rn ? db.filter(c => norm(c.nom) === rn) : [];
@@ -900,7 +905,7 @@ async function analitza(){
     let m = matchClient(r, DB);
     // amb codi REGA, el registre oficial mana per sobre d'una coincidència dubtosa per nom
     // o d'un punt aproximat de la base (centre del poble…); si el registre falla, es torna al de la base
-    const aprox = m && ['poble', 'municipi', 'rega?', 'masia?', 'carrer?'].includes(m.client.precisio);
+    const aprox = m && m.client.marca !== r.marca && ['poble', 'municipi', 'rega?', 'masia?', 'carrer?'].includes(m.client.precisio);
     if (m && r.marca && (m.via === 'fuzzy?' || m.via === 'fuzzy' || aprox)) { if (aprox && m.via !== 'fuzzy?' && m.via !== 'fuzzy') r.base = m.client; m = null; }
     if (m){
       if (!m.client.lat || !m.client.lon){ unmatched.push({row:r, reason:'sense coordenades a la base'}); continue; }
