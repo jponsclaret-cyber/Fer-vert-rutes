@@ -76,7 +76,7 @@
     Enganxa les files del Google Sheet (id, nom, adreça, poble… — l'ordre no cal que sigui exacte).
     S'identifiquen per id de contracte o per nom.
   </div>
-  <div style="margin-bottom:10px;font-size:13px"><b>0.</b> Base de clients: <input type="file" id="dbfile" accept=".json,.enc"></div>
+  <div style="margin-bottom:10px;font-size:13px"><b>0.</b> Base de clients: <input type="file" id="dbfile"></div>
   <textarea id="paste" placeholder="1042	GRANJA CAN PUIG	Can Puig	Vilobí d'Onyar	Selva Interior
 1187	RAMADERIA MASNOU SL	Mas Nou	Cassà de la Selva	…"></textarea>
   <div class="row">
@@ -811,13 +811,15 @@ document.getElementById('dbfile').addEventListener('change', async e => {
   if (!f) return;
   try {
     let text;
-    if (/\.enc$/i.test(f.name)) {
+    // xifrat si comença per "Salted__" (openssl), no per l'extensió: a l'iPad el selector no filtra bé i el nom pot canviar
+    const buf = await f.arrayBuffer();
+    if (new TextDecoder().decode(buf.slice(0, 8)) === 'Salted__') {
       const pass = await askPassword();
       if (pass === null) return;
-      try { text = await decryptOpenSSL(await f.arrayBuffer(), pass); }
+      try { text = await decryptOpenSSL(buf, pass); }
       catch (err) { dbError('Contrasenya incorrecta o fitxer no vàlid'); return; }
     } else {
-      text = await f.text();
+      text = new TextDecoder().decode(buf);
     }
     const data = JSON.parse(text);
     if (!Array.isArray(data)) throw new Error('format');
