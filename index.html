@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Fer-Vert — Optimitzador de rutes de recollida</title>
+<title>Fer-Vet — Optimitzador de rutes de recollida</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
@@ -65,7 +65,7 @@
 </head>
 <body>
 <header>
-  <h1>🚛 Fer-Vert — Rutes de recollida</h1>
+  <h1>🚛 Fer-Vet — Rutes de recollida</h1>
   <span>Depot: Riudellots de la Selva · <span id="dbcount">carregant…</span> clients a la base</span>
 </header>
 <main>
@@ -128,7 +128,7 @@
 </div>
 
 </main>
-<footer>Fer-Vert · optimitzador local — la base de clients no surt del teu ordinador. Només s'envien coordenades (càlcul de rutes), codis d'explotació (registre REGA) i noms de pobles i masies (geocodificador ICGC), mai noms de persones.</footer>
+<footer>Fer-Vet · optimitzador local — la base de clients no surt del teu ordinador. Només s'envien coordenades (càlcul de rutes), codis d'explotació (registre REGA) i noms de pobles i masies (geocodificador ICGC), mai noms de persones.</footer>
 
 <div id="pwmodal">
   <div id="pwbox">
@@ -142,9 +142,9 @@
 </div>
 
 <script>
-// Fer-Vert rutes: matching + clustering + TSP. Pure JS, sense dependències.
+// Fer-Vet rutes: matching + clustering + TSP. Pure JS, sense dependències.
 
-const DEPOT = { lat: 41.9020, lon: 2.8103, nom: 'Fer-Vert (Riudellots)' };
+const DEPOT = { lat: 41.9020, lon: 2.8103, nom: 'Fer-Vet (Riudellots)' };
 
 // ---------- normalització i matching ----------
 const STOPWORDS = new Set(['can','cal','mas','masia','granja','granges','casa','veinat','veïnat',
@@ -1345,7 +1345,7 @@ function drawMap(){
   if (mapLayer) map.removeLayer(mapLayer);
   mapLayer = L.layerGroup().addTo(map);
   L.marker([DEPOT.lat, DEPOT.lon], { icon: L.divIcon({ html:'🏭', className:'', iconSize:[24,24] }) })
-    .bindPopup('<b>Fer-Vert</b><br>Riudellots de la Selva').addTo(mapLayer);
+    .bindPopup('<b>Fer-Vet</b><br>Riudellots de la Selva').addTo(mapLayer);
   const allPts = [[DEPOT.lat, DEPOT.lon]];
   lastRoutes.forEach((r, i) => {
     if (!selectedRoutes.has(i)) return;
